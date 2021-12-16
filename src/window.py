@@ -1,12 +1,21 @@
 from tkinter import Tk, Canvas, NW
 from tkinter import *
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageGrab
 import cv2
 import effects
 import os
 
 
-def show_frames(frames_label, cap, effects_manager):
+def take_picture(root, canvas):
+    x = root.winfo_rootx() + canvas.winfo_x() + 54
+    y = root.winfo_rooty() + canvas.winfo_y() + 2
+    xx = x + canvas.winfo_width() - 4
+    yy = y + canvas.winfo_height() - 127
+
+    ImageGrab.grab(bbox=(x, y, xx, yy)).save("imgs/screenshot.png")
+
+
+def show_frames(frames_canvas, cap, effects_manager):
     frame = cap.read()[1]
 
     frame_with_effect = cv2.cvtColor(
@@ -15,16 +24,20 @@ def show_frames(frames_label, cap, effects_manager):
     img = Image.fromarray(frame_with_effect)
 
     imgtk = ImageTk.PhotoImage(image=img)
-    frames_label.imgtk = imgtk
-    frames_label.configure(image=imgtk)
-    frames_label.grid(row=0, column=1)
-    frames_label.after(60, lambda: show_frames(
-        frames_label, cap, effects_manager))
-    return frames_label
+    frames_canvas.imgtk = imgtk
+    frame_id = frames_canvas.create_image(0, 0, image=imgtk, anchor=NW)
+    frames_canvas.tag_lower(frame_id)
+    frames_canvas.after(60, lambda: show_frames(
+        frames_canvas, cap, effects_manager))
+    return frames_canvas
 
 
-def move(e, label):
-    label.config(text=f"Coordinates: x:{e.x} y:{e.y}")
+def move(e, frames_canvas, i):
+    global img
+    img = ImageTk.PhotoImage(
+        Image.open(f"imgs/stickers/{i}.png").resize((80, 80), Image.ANTIALIAS))
+
+    frames_canvas.create_image(e.x, e.y, image=img)
 
 
 def main():
@@ -33,9 +46,18 @@ def main():
     # Video
     cap = cv2.VideoCapture(0)
     effects_manager = effects.EffectsManager()
-    frames_label = show_frames(Label(root), cap, effects_manager)
+    main_frame = Frame(root)
+    main_frame.grid(row=0, column=1)
 
-    # Buttons
+    frames_canvas = Canvas(main_frame, width=600, height=600)
+
+    Button(main_frame, text="Take picture", bd=0,
+           bg='#addedb', width=20, height=2, command=lambda: take_picture(root, frames_canvas)).pack(pady=10)
+
+    frames_canvas.pack(expand=YES, fill=BOTH)
+    frames_canvas = show_frames(frames_canvas, cap, effects_manager)
+
+    # # Buttons
     width = 25
     height = 40
 
@@ -53,44 +75,21 @@ def main():
     # Stickers
     sticker_paths = os.listdir("imgs/stickers")
     stickers_qty = len(sticker_paths)
-
-    stickers_bar = Frame(root)
-    stickers_bar.grid(row=2, columnspan=stickers_qty)
-
-    stickers_canvas = Canvas(stickers_bar, height=80, width=600)
-    stickers_canvas.grid(row=2, columnspan=stickers_qty)
-
-    scroll_bar = Scrollbar(stickers_bar, orient=HORIZONTAL,
-                           command=stickers_canvas.xview)
-    scroll_bar.grid(row=1, columnspan=stickers_qty, sticky=E+W)
-
-    stickers_canvas.configure(xscrollcommand=scroll_bar.set)
-    stickers_canvas.bind('<Configure>', lambda e: stickers_canvas.configure(
-        scrollregion=stickers_canvas.bbox("all")))
-
-    aux_frame = Frame(stickers_bar)
-    stickers_canvas.create_window((0, 0), window=aux_frame)
+    imgs = list(range(stickers_qty))
+    binds = list(range(stickers_qty))
 
     for i in range(stickers_qty):
-        sticker_image = ImageTk.PhotoImage(
+        def make_lambda(x):
+            return lambda e: move(e, frames_canvas, x + 1)
+
+        imgs[i] = ImageTk.PhotoImage(
             Image.open(f"imgs/stickers/{sticker_paths[i]}").resize((80, 80), Image.ANTIALIAS))
 
-        sticker = Label(aux_frame, image=sticker_image)
-        sticker.image = sticker_image
-        sticker.grid(row=1, column=i)
+        binds[i] = frames_canvas.create_image(
+            i*80, 500, image=imgs[i], anchor=NW)
 
-    # Sticker movement
-    frames_label.update()
-    frames_label_h = frames_label.winfo_height()
-    frames_label_w = frames_label.winfo_width()
-
-    x = frames_label_w / 2
-    y = frames_label_h / 2
-
-    l = Label(root, text="")
-    l.grid(row=4, column=1)
-
-    frames_label.bind('<B1-Motion>', lambda e: move(e, l))
+        frames_canvas.tag_bind(
+            binds[i], '<B1-Motion>', make_lambda(i), add=f"+a{i}")
 
     root.mainloop()
 
