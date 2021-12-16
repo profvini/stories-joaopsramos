@@ -31,7 +31,7 @@ def alpha_blend(frame_1, frame_2, mask):
 
 
 def invert(frame):
-    return cv2.bitwise_not(frame)
+    return np.invert(frame)
 
 
 def sepia(frame, intensity=0.5):
@@ -71,54 +71,36 @@ def portrait_mode(frame):
     return frame
 
 
-def main():
-    cap = cv2.VideoCapture(3)
+def no_effect(frame):
+    return frame
 
-    if not cap.isOpened():
-        print("Could not open video device")
-        return
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+class EffectsManager:
+    def __init__(self):
+        self.selected_position = 0
+        self.effects = [no_effect, invert,
+                        circle_focus_blur, portrait_mode, sepia]
+        self.selected = self.effects[self.selected_position]
 
-    ret, frame = cap.read()
-    result = frame.copy()
+    def apply_effect(self, frame):
+        return self.effects[self.selected_position](frame)
 
-    available_opts = ['b', 'n', 'p', 's']
+    def next_effect(self):
+        next_position = self.selected_position + 1
 
-    selected_key = 'n'
-
-    while(True):
-        ret, frame = cap.read()
-
-        cv2.imshow("original", frame)
-        cv2.imshow("filtro", result)
-
-        key = cv2.waitKey(1)
-
-        if key != -1 and chr(key) in available_opts:
-            key = chr(key)
+        if next_position < len(self.effects):
+            self.selected_position = next_position
         else:
-            key = selected_key
+            self.selected_position = 0
 
-        if key == '\x1b':
-            break
-        elif key == 'n':
-            result = invert(frame)
-        elif key == 'b':
-            result = circle_focus_blur(frame)
-        elif key == 'p':
-            result = portrait_mode(frame)
-        elif key == 's':
-            result = sepia(frame)
+        self.selected = self.effects[self.selected_position]
 
-        selected_key = key
+    def previous_effect(self):
+        next_position = self.selected_position - 1
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        if next_position >= 0:
+            self.selected_position = next_position
+        else:
+            self.selected_position = len(self.effects) - 1
 
-    cv2.waitKey()
-
-
-if __name__ == '__main__':
-    main()
+        self.selected = self.effects[self.selected_position]
